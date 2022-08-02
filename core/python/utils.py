@@ -54,33 +54,30 @@ def create_or_update_yaml_file(file_path, new_data):
     if not file_path or not new_data:
         return
 
-    merged_data = dict()
+    merged_data = {}
 
     if os.path.exists(file_path):
         with open(file_path, "r") as file:
             data_loaded_from_file = yaml.safe_load(file.read())
 
         if not data_loaded_from_file:
-            data_loaded_from_file = list()
+            data_loaded_from_file = []
 
         for loaded_section in data_loaded_from_file:
             for loaded_key, loaded_value in loaded_section.items():
                 if loaded_key not in new_data.keys():
                     merged_data[loaded_key] = loaded_value
 
-    merged_data.update(new_data)
+    merged_data |= new_data
 
-    converted_data = list()
-
-    for key, value in merged_data.items():
-        converted_data.append({key: value})
+    converted_data = [{key: value} for key, value in merged_data.items()]
 
     with open(file_path, "w") as file:
         file.write(yaml.safe_dump(converted_data))
 
 
 def dirs_at_location(base_path, names_only=False):
-    dirs = list()
+    dirs = []
     for filesystem_object in os.scandir(base_path):
         if filesystem_object.is_dir():
             if names_only:
@@ -100,17 +97,20 @@ def display_terraform_step_error(step, retcode, stdout, stderr):
 
 
 def extract_cgid_from_dir_name(dir_name):
-    match = re.match(r"(?:.*)\_(cgid(?:[a-z0-9]){10})", dir_name)
-    if match:
-        return match.group(1)
+    if match := re.match(r"(?:.*)\_(cgid(?:[a-z0-9]){10})", dir_name):
+        return match[1]
     return None
 
 
 def find_scenario_dir(scenarios_dir, dir_name):
-    for dir_path in dirs_at_location(scenarios_dir):
-        if os.path.basename(dir_path) == dir_name:
-            return dir_path
-    return None
+    return next(
+        (
+            dir_path
+            for dir_path in dirs_at_location(scenarios_dir)
+            if os.path.basename(dir_path) == dir_name
+        ),
+        None,
+    )
 
 
 def find_scenario_instance_dir(base_dir, scenario_name):
@@ -125,7 +125,8 @@ def find_scenario_instance_dir(base_dir, scenario_name):
 
 def generate_cgid():
     return "cgid" + "".join(
-        random.choice(string.ascii_lowercase + string.digits) for x in range(10)
+        random.choice(string.ascii_lowercase + string.digits)
+        for _ in range(10)
     )
 
 
@@ -142,7 +143,7 @@ def ip_address_or_range_is_valid(text):
 
     if octets.startswith(".") or octets.endswith("."):
         return False
-    elif not len(octets.split(".")) == 4:
+    elif len(octets.split(".")) != 4:
         return False
 
     for octet in octets.split("."):
@@ -162,7 +163,7 @@ def ip_address_or_range_is_valid(text):
 
 
 def load_and_validate_whitelist(whitelist_path):
-    whitelisted_ips = list()
+    whitelisted_ips = []
 
     with open(whitelist_path, "r") as whitelist_file:
         lines = whitelist_file.read().split("\n")
@@ -198,9 +199,9 @@ def load_and_validate_whitelist(whitelist_path):
 
     if not whitelisted_ips:
         print(
-            f"No IP addresses or ranges found. Add IP addresses in CIDR notation, or"
-            f' delete the whitelist.txt file and try "config whitelist".'
+            'No IP addresses or ranges found. Add IP addresses in CIDR notation, or delete the whitelist.txt file and try "config whitelist".'
         )
+
         return None
 
     return whitelisted_ips
@@ -225,10 +226,9 @@ def normalize_scenario_name(scenario_name_or_path):
     if not scenario_name_or_path:
         return scenario_name_or_path
 
-    scenario_instance_name_match = re.findall(
+    if scenario_instance_name_match := re.findall(
         r".*?(\w+)_cgid(?:[a-z0-9]){10}.*", scenario_name_or_path
-    )
-    if scenario_instance_name_match:
+    ):
         return scenario_instance_name_match[0]
 
     if scenario_name_or_path.count(os.path.sep) == 0:
@@ -236,9 +236,8 @@ def normalize_scenario_name(scenario_name_or_path):
 
     fully_split_path = scenario_name_or_path.split(os.path.sep)
 
-    if "scenarios" in fully_split_path:
-        index = fully_split_path.index("scenarios")
-        relative_path = os.path.sep.join(fully_split_path[index : index + 2])
-        return os.path.basename(relative_path.strip(os.path.sep))
-    else:
+    if "scenarios" not in fully_split_path:
         return os.path.basename(scenario_name_or_path.strip(os.path.sep))
+    index = fully_split_path.index("scenarios")
+    relative_path = os.path.sep.join(fully_split_path[index : index + 2])
+    return os.path.basename(relative_path.strip(os.path.sep))

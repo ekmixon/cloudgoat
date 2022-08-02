@@ -48,8 +48,8 @@ class CloudGoat:
 
         # Display help text. Putting this first makes validation simpler.
         if len(command) == 0 \
-                or command[0] in ["help", "-h", "--help"] \
-                or (len(command) >= 2 and command[-1] == "help"):
+                    or command[0] in ["help", "-h", "--help"] \
+                    or (len(command) >= 2 and command[-1] == "help"):
             return self.display_cloudgoat_help(command)
 
         # Validation
@@ -84,7 +84,7 @@ class CloudGoat:
 
         if command[0] in ("create", "destroy", "list"):
             if command[1].lower() in self.cloudgoat_commands:
-                print(f"CloudGoat scenarios cannot be named after CloudGoat commands.")
+                print("CloudGoat scenarios cannot be named after CloudGoat commands.")
                 return
             if command[1] in self.non_scenario_instance_dirs:
                 print(
@@ -93,25 +93,24 @@ class CloudGoat:
                 )
                 return
 
-        if command[0] in ("create", "destroy"):
+        if command[0] in ("create", "destroy") and not profile:
+            if os.path.exists(self.config_path):
+                profile = load_data_from_yaml_file(
+                    self.config_path, "default-profile"
+                )
             if not profile:
-                if os.path.exists(self.config_path):
-                    profile = load_data_from_yaml_file(
-                        self.config_path, "default-profile"
-                    )
-                if not profile:
-                    print(
-                        f"The {command[0]} command requires the use of the --profile"
-                        f" flag, or a default profile defined in the config.yml file"
-                        f' (try "config profile").'
-                    )
-                    return
-                else:
-                    print(f'Using default profile "{profile}" from config.yml...')
+                print(
+                    f"The {command[0]} command requires the use of the --profile"
+                    f" flag, or a default profile defined in the config.yml file"
+                    f' (try "config profile").'
+                )
+                return
+            else:
+                print(f'Using default profile "{profile}" from config.yml...')
 
         # Execution
         if command[0] == "config":
-            if command[1] == "whitelist" or command[1] == "whitelist.txt":
+            if command[1] in ["whitelist", "whitelist.txt"]:
                 return self.configure_or_check_whitelist(
                     auto=parsed_args.auto, print_values=True
                 )
@@ -139,7 +138,7 @@ class CloudGoat:
             else:
                 return self.list_scenario_instance(command[1])
 
-        print(f'Unrecognized command. Try "cloudgoat.py help"')
+        print('Unrecognized command. Try "cloudgoat.py help"')
         return
 
     def display_cloudgoat_help(self, command):
@@ -161,13 +160,14 @@ class CloudGoat:
         elif command[0] == "list":
             return print(help_text.LIST)
         elif command[0] == "help":
-            if all([word == "help" for word in command]):
-                joined_help_texts = " ".join(["help text for" for word in command])
+            if all(word == "help" for word in command):
+                joined_help_texts = " ".join(["help text for" for _ in command])
                 return print(f"Displays {joined_help_texts} CloudGoat.")
         else:
             scenario_name = normalize_scenario_name(command[0])
-            scenario_dir_path = find_scenario_dir(self.scenarios_dir, scenario_name)
-            if scenario_dir_path:
+            if scenario_dir_path := find_scenario_dir(
+                self.scenarios_dir, scenario_name
+            ):
                 scenario_help_text = load_data_from_yaml_file(
                     os.path.join(scenario_dir_path, "manifest.yml"), "help"
                 ).strip()
@@ -176,8 +176,7 @@ class CloudGoat:
                 )
 
         return print(
-            f'Unrecognized command or scenario name. Try "cloudgoat.py help" or'
-            f' "cloudgoat.py list all"'
+            'Unrecognized command or scenario name. Try "cloudgoat.py help" or "cloudgoat.py list all"'
         )
 
     def configure_argcomplete(self):
@@ -193,34 +192,31 @@ class CloudGoat:
             default_profile = None
         else:
             print(f"A configuration file exists at {self.config_path}")
-            default_profile = load_data_from_yaml_file(
+            if default_profile := load_data_from_yaml_file(
                 self.config_path, "default-profile"
-            )
-            if default_profile:
+            ):
                 print(f'It specifies a default profile name of "{default_profile}".')
             else:
-                print(f"It does not contain a default profile name.")
+                print("It does not contain a default profile name.")
             create_config_file_now = input(
-                f"Would you like to specify a new default profile name for the"
-                f" configuration file now? [y/n]: "
+                'Would you like to specify a new default profile name for the configuration file now? [y/n]: '
             )
+
 
         if not create_config_file_now.strip().lower().startswith("y"):
             return
 
         while True:
-            default_profile = input(
-                f"Enter the name of your default AWS profile: "
-            ).strip()
-
-            if default_profile:
+            if default_profile := input(
+                "Enter the name of your default AWS profile: "
+            ).strip():
                 create_or_update_yaml_file(
                     self.config_path, {"default-profile": default_profile}
                 )
                 print(f'A default profile name of "{default_profile}" has been saved.')
                 break
             else:
-                print(f"Enter your default profile's name, or hit ctrl-c to exit.")
+                print("Enter your default profile's name, or hit ctrl-c to exit.")
                 continue
 
         return
@@ -268,7 +264,7 @@ class CloudGoat:
                     return None
 
             else:
-                print(f"Automatic whitelist.txt configuration cancelled.")
+                print("Automatic whitelist.txt configuration cancelled.")
                 return None
 
         elif not os.path.exists(self.whitelist_path):
@@ -303,13 +299,13 @@ class CloudGoat:
                     continue
 
         else:
-            print(f"Loading whitelist.txt...")
+            print("Loading whitelist.txt...")
             whitelist = load_and_validate_whitelist(self.whitelist_path)
             if whitelist:
                 print(
-                    f"A whitelist.txt file was found that contains at least one valid"
-                    f" IP address or range."
+                    'A whitelist.txt file was found that contains at least one valid IP address or range.'
                 )
+
                 if print_values:
                     print(f"Whitelisted IP addresses:\n    " + "\n    ".join(whitelist))
             return whitelist
@@ -319,22 +315,24 @@ class CloudGoat:
         scenario_dir = os.path.join(self.scenarios_dir, scenario_name)
 
         if not scenario_dir or not scenario_name or not os.path.exists(scenario_dir):
-            if not scenario_name:
-                return print(
-                    f"No recognized scenario name was entered. Did you mean one of"
-                    f" these?\n    " + f"\n    ".join(self.scenario_names)
-                )
-            else:
-                return print(
+            return (
+                print(
                     f"No scenario named {scenario_name} exists in the scenarios"
                     f" directory. Did you mean one of these?"
                     f"\n    " + f"\n    ".join(self.scenario_names)
                 )
+                if scenario_name
+                else print(
+                    f"No recognized scenario name was entered. Did you mean one of"
+                    f" these?\n    " + f"\n    ".join(self.scenario_names)
+                )
+            )
 
-        if not os.path.exists(self.whitelist_path):
-            cg_whitelist = self.configure_or_check_whitelist(auto=True)
-        else:
-            cg_whitelist = self.configure_or_check_whitelist()
+        cg_whitelist = (
+            self.configure_or_check_whitelist()
+            if os.path.exists(self.whitelist_path)
+            else self.configure_or_check_whitelist(auto=True)
+        )
 
         if not cg_whitelist:
             print(
@@ -372,9 +370,6 @@ class CloudGoat:
                 ["sh", "start.sh"], cwd=instance_path
             )
             start_script_process.wait()
-        else:
-            pass
-
         terraform = Terraform(
             working_dir=os.path.join(instance_path, "terraform")
         )
@@ -459,7 +454,7 @@ class CloudGoat:
 
     def destroy_all_scenarios(self, profile):
         # Information gathering.
-        extant_scenario_instance_names_and_paths = list()
+        extant_scenario_instance_names_and_paths = []
         for scenario_name in self.scenario_names:
             scenario_instance_dir_path = find_scenario_instance_dir(
                 self.base_dir, scenario_name
@@ -467,11 +462,10 @@ class CloudGoat:
 
             if scenario_instance_dir_path is None:
                 continue
-            else:
-                extant_scenario_instance_names_and_paths.append(
-                    (scenario_name, scenario_instance_dir_path)
-                )
-                print(f"Scenario instance for {scenario_name} found.")
+            extant_scenario_instance_names_and_paths.append(
+                (scenario_name, scenario_instance_dir_path)
+            )
+            print(f"Scenario instance for {scenario_name} found.")
 
         if not extant_scenario_instance_names_and_paths:
             print(f"\n  No scenario instance directories exist.\n")
@@ -491,7 +485,7 @@ class CloudGoat:
             # Confirmation.
             delete_permission = input(f'Destroy "{scenario_name}"? [y/n]: ')
 
-            if not delete_permission.strip()[0].lower() == "y":
+            if delete_permission.strip()[0].lower() != "y":
                 skipped_count += 1
                 print(f"\nSkipped destruction of {scenario_name}.\n")
                 continue
@@ -504,16 +498,21 @@ class CloudGoat:
 
                 cgid = extract_cgid_from_dir_name(os.path.basename(instance_path))
 
-                destroy_retcode, destroy_stdout, destroy_stderr = terraform.destroy(
+                (
+                    destroy_retcode,
+                    destroy_stdout,
+                    destroy_stderr,
+                ) = terraform.destroy(
                     capture_output=False,
                     var={
                         "cgid": cgid,
-                        "cg_whitelist": list(),
+                        "cg_whitelist": [],
                         "profile": profile,
                         "region": self.aws_region,
                     },
                     no_color=IsNotFlagged,
                 )
+
                 if destroy_retcode != 0:
                     display_terraform_step_error(
                         "terraform destroy",
@@ -579,7 +578,7 @@ class CloudGoat:
         # Confirmation.
         if not confirmed:
             delete_permission = input(f'Destroy "{instance_name}"? [y/n]: ').strip()
-            if not delete_permission or not delete_permission[0].lower() == "y":
+            if not delete_permission or delete_permission[0].lower() != "y":
                 print(f"\nCancelled destruction of {instance_name}.\n")
                 return
 
@@ -597,12 +596,13 @@ class CloudGoat:
                 capture_output=False,
                 var={
                     "cgid": cgid,
-                    "cg_whitelist": list(),
+                    "cg_whitelist": [],
                     "profile": profile,
                     "region": self.aws_region,
                 },
                 no_color=IsNotFlagged,
             )
+
             if destroy_retcode != 0:
                 display_terraform_step_error(
                     "terraform destroy", destroy_retcode, destroy_stdout, destroy_stderr
@@ -633,14 +633,13 @@ class CloudGoat:
         return
 
     def list_all_scenarios(self):
-        undeployed_scenarios = list()
-        deployed_scenario_instance_paths = list()
+        undeployed_scenarios = []
+        deployed_scenario_instance_paths = []
 
         for scenario_name in self.scenario_names:
-            scenario_instance_dir_path = find_scenario_instance_dir(
+            if scenario_instance_dir_path := find_scenario_instance_dir(
                 self.base_dir, scenario_name
-            )
-            if scenario_instance_dir_path:
+            ):
                 deployed_scenario_instance_paths.append(scenario_instance_dir_path)
 
             else:
@@ -654,10 +653,9 @@ class CloudGoat:
             directory_name = os.path.basename(scenario_instance_dir_path)
             scenario_name, cgid = directory_name.split("_cgid")
             print(
-                f"\n    {scenario_name}"
-                f"\n        CGID: {'cgid' + cgid}"
-                f"\n        Path: {scenario_instance_dir_path}"
+                f"\n    {scenario_name}\n        CGID: cgid{cgid}\n        Path: {scenario_instance_dir_path}"
             )
+
 
         print(f"\n  Undeployed scenarios: {len(undeployed_scenarios)}")
 
@@ -671,7 +669,7 @@ class CloudGoat:
         print(f"")
 
     def list_deployed_scenario_instances(self):
-        deployed_scenario_instances = list()
+        deployed_scenario_instances = []
         for scenario_name in self.scenario_names:
             scenario_instance_dir_path = find_scenario_instance_dir(
                 self.base_dir, scenario_name
@@ -698,20 +696,18 @@ class CloudGoat:
             scenario_name, cgid = directory_name.split("_cgid")
 
             print(
-                f"\n    {scenario_name}"
-                f"\n        CGID: {'cgid' + cgid}"
-                f"\n        Path: {scenario_instance_dir_path}"
+                f"\n    {scenario_name}\n        CGID: cgid{cgid}\n        Path: {scenario_instance_dir_path}"
             )
+
 
         print("")
 
     def list_undeployed_scenarios(self):
-        undeployed_scenarios = list()
-        for scenario_name in self.scenario_names:
-            if not find_scenario_instance_dir(self.base_dir, scenario_name):
-                undeployed_scenarios.append(scenario_name)
-
-        if undeployed_scenarios:
+        if undeployed_scenarios := [
+            scenario_name
+            for scenario_name in self.scenario_names
+            if not find_scenario_instance_dir(self.base_dir, scenario_name)
+        ]:
             return print(
                 f"\n  Undeployed scenarios: {len(undeployed_scenarios)}\n\n    "
                 + f"\n    ".join(undeployed_scenarios)

@@ -70,10 +70,9 @@ class Terraform(object):
         self.working_dir = working_dir
         self.state = state
         self.targets = [] if targets is None else targets
-        self.variables = dict() if variables is None else variables
+        self.variables = {} if variables is None else variables
         self.parallelism = parallelism
-        self.terraform_bin_path = terraform_bin_path \
-            if terraform_bin_path else 'terraform'
+        self.terraform_bin_path = terraform_bin_path or 'terraform'
         self.var_file = var_file
         self.temp_var_files = VariableFiles()
 
@@ -84,8 +83,7 @@ class Terraform(object):
     def __getattr__(self, item):
         def wrapper(*args, **kwargs):
             cmd_name = str(item)
-            if cmd_name.endswith('_cmd'):
-                cmd_name = cmd_name[:-4]
+            cmd_name = cmd_name.removesuffix('_cmd')
             logging.debug('called with %r and %r' % (args, kwargs))
             return self.cmd(cmd_name, *args, **kwargs)
 
@@ -95,7 +93,7 @@ class Terraform(object):
         _, out, _ = self.cmd('version', raise_on_error=True)
         try:
             ver = [l for l in out.splitlines() if 'Terraform' in l][0].split(' ')[-1]
-            return float('.'.join(ver.strip('v').split('.')[0:-1]))
+            return float('.'.join(ver.strip('v').split('.')[:-1]))
         except KeyError:
             raise UserWarning('Could not find version in `terraform version` output')
 
@@ -123,15 +121,17 @@ class Terraform(object):
         return [dir_or_plan] if dir_or_plan else []
 
     def _generate_default_options(self, input_options):
-        option_dict = dict()
-        option_dict['state'] = self.state
-        option_dict['target'] = self.targets
-        option_dict['var'] = self.variables
-        option_dict['var_file'] = self.var_file
-        option_dict['parallelism'] = self.parallelism
-        option_dict['no_color'] = IsFlagged
-        option_dict['input'] = False
-        option_dict.update(input_options)
+        option_dict = {
+            'state': self.state,
+            'target': self.targets,
+            'var': self.variables,
+            'var_file': self.var_file,
+            'parallelism': self.parallelism,
+            'no_color': IsFlagged,
+            'input': False,
+        }
+
+        option_dict |= input_options
         return option_dict
 
     def destroy(self, dir_or_plan=None, force=IsFlagged, **kwargs):
@@ -141,7 +141,7 @@ class Terraform(object):
         :return: ret_code, stdout, stderr
         """
         default = kwargs
-        if 0.15 <= self.version():
+        if self.version() >= 0.15:
             default['auto-approve'] = force
         else:
             default['force'] = force
@@ -229,14 +229,10 @@ class Terraform(object):
                 if 'backend-config' in option:
                     for bk, bv in value.items():
                         cmds += ['-backend-config={k}={v}'.format(k=bk, v=bv)]
-                    continue
-
-                # since map type sent in string won't work, create temp var file for
-                # variables, and clean it up later
                 else:
                     filename = self.temp_var_files.create(value)
                     cmds += ['-var-file={0}'.format(filename)]
-                    continue
+                continue
 
             # simple flag,
             if value is IsFlagged:
@@ -293,12 +289,9 @@ class Terraform(object):
         cmds = self.generate_cmd_string(cmd, *args, **kwargs)
         log.debug('command: {c}'.format(c=' '.join(cmds)))
 
-        working_folder = self.working_dir if self.working_dir else None
+        working_folder = self.working_dir or None
 
-        environ_vars = {}
-        if self.is_env_vars_included:
-            environ_vars = os.environ.copy()
-
+        environ_vars = os.environ.copy() if self.is_env_vars_included else {}
         p = subprocess.Popen(cmds, stdout=stdout, stderr=stderr,
                              cwd=working_folder, env=environ_vars)
 
@@ -357,8 +350,8 @@ class Terraform(object):
         full_value = kwargs.pop('full_value', False)
         name_provided = (len(args) > 0)
         kwargs['json'] = IsFlagged
-        if not kwargs.get('capture_output', True) is True:
-          raise ValueError('capture_output is required for this method')
+        if kwargs.get('capture_output', True) is not True:
+            raise ValueError('capture_output is required for this method')
 
         ret, out, err = self.output_cmd(*args, **kwargs)
 

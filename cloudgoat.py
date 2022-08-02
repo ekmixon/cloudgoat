@@ -16,11 +16,12 @@ def command_completer(prefix, parsed_args, **kwargs):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     scenarios_dir = os.path.join(base_dir, "scenarios")
 
-    scenario_dir_names = list()
+    scenario_dir_names = [
+        os.path.basename(filesystem_object.path)
+        for filesystem_object in os.scandir(scenarios_dir)
+        if filesystem_object.is_dir()
+    ]
 
-    for filesystem_object in os.scandir(scenarios_dir):
-        if filesystem_object.is_dir():
-            scenario_dir_names.append(os.path.basename(filesystem_object.path))
 
     if len(parsed_args.command) == 1:
         if parsed_args.command[0] == "config":
@@ -79,9 +80,7 @@ if __name__ == "__main__":
     # all non-completion output and exits early.
     args = parse_args()
 
-    if sys.version_info[0] < 3 or (
-        sys.version_info[0] >= 3 and sys.version_info[1] < 6
-    ):
+    if sys.version_info[0] < 3 or sys.version_info[1] < 6:
         print("CloudGoat requires Python 3.6+ to run.")
         sys.exit(1)
 
@@ -107,9 +106,9 @@ if __name__ == "__main__":
     major_version, minor_version = version_number[0].split(".")
     if int(major_version) == 0 and int(minor_version) < 11:
         print(
-            "Your version of Terraform is v{}. CloudGoat requires Terraform v0.12 or"
-            " higher to run.".format(version_number[0])
+            f"Your version of Terraform is v{version_number[0]}. CloudGoat requires Terraform v0.12 or higher to run."
         )
+
 
     try:
         from core.python.commands import CloudGoat
